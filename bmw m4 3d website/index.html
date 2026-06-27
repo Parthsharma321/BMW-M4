@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>M4 COMPETITION — The Pursuit of Velocity</title>
+<meta name="description" content="An immersive 3D showcase of the BMW M4 Competition." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://esm.sh/three@0.165.0",
+    "three/addons/": "https://esm.sh/three@0.165.0/examples/jsm/",
+    "gsap": "https://esm.sh/gsap@3.12.5",
+    "gsap/ScrollTrigger": "https://esm.sh/gsap@3.12.5/ScrollTrigger",
+    "lenis": "https://esm.sh/lenis@1.1.13"
+  }
+}
+</script>
+
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ===================== LOADER ===================== -->
+<div id="loader">
+  <div class="loader-inner">
+    <svg class="loader-silhouette" viewBox="0 0 600 140" preserveAspectRatio="xMidYMid meet">
+      <path id="carSilhouette" d="M40,100 C45,85 60,78 80,76 C95,55 130,42 170,40 L260,38 C300,30 360,28 410,36 C450,40 480,55 500,76 C520,78 540,85 545,100 L545,108 L40,108 Z" />
+    </svg>
+    <div class="loader-word-wrap">
+      <span class="loader-word">M4</span>
+      <span class="loader-word loader-word-thin">COMPETITION</span>
+    </div>
+    <div class="loader-bar-track">
+      <div class="loader-bar-fill" id="loaderBarFill"></div>
+    </div>
+    <div class="loader-pct" id="loaderPct">0%</div>
+  </div>
+  <div class="loader-particles" id="loaderParticles"></div>
+</div>
+
+<!-- ===================== CANVAS ===================== -->
+<canvas id="webgl"></canvas>
+<div id="vignette"></div>
+<div id="grain"></div>
+
+<!-- ===================== NAV ===================== -->
+<nav id="navbar">
+  <div class="nav-inner">
+    <a class="nav-logo" href="#hero">
+      <span class="nav-logo-mark">M4</span>
+      <span class="nav-logo-text">COMPETITION</span>
+    </a>
+    <div class="nav-links">
+      <a href="#overview" data-section="overview">Overview</a>
+      <a href="#performance" data-section="performance">Performance</a>
+      <a href="#exterior" data-section="exterior">Exterior</a>
+      <a href="#interior" data-section="interior">Interior</a>
+      <a href="#specs" data-section="specs">Specs</a>
+      <a href="#contact" data-section="contact">Contact</a>
+    </div>
+    <button class="nav-cta" id="navConfigure">Configure</button>
+    <button class="nav-burger" id="navBurger" aria-label="Open menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<div id="mobileMenu">
+  <a href="#overview" data-section="overview">Overview</a>
+  <a href="#performance" data-section="performance">Performance</a>
+  <a href="#exterior" data-section="exterior">Exterior</a>
+  <a href="#interior" data-section="interior">Interior</a>
+  <a href="#technology" data-section="technology">Technology</a>
+  <a href="#specs" data-section="specs">Specs</a>
+  <a href="#gallery" data-section="gallery">Gallery</a>
+  <a href="#contact" data-section="contact">Contact</a>
+</div>
+
+<!-- ===================== SCROLL PROGRESS / SECTION RAIL ===================== -->
+<div id="sectionRail">
+  <svg viewBox="0 0 8 400" id="railTrace" preserveAspectRatio="none">
+    <path d="M4,0 L4,400" class="rail-track" />
+    <path d="M4,0 L4,400" class="rail-fill" id="railFillPath" />
+  </svg>
+  <div class="rail-dots" id="railDots"></div>
+</div>
+
+<!-- ===================== TELEMETRY HUD (signature element) ===================== -->
+<div id="telemetryHud">
+  <div class="hud-row">
+    <span class="hud-label">SECTION</span>
+    <span class="hud-value" id="hudSection">00 / HERO</span>
+  </div>
+  <div class="hud-trace">
+    <svg viewBox="0 0 300 40" preserveAspectRatio="none">
+      <path d="M0,30 L40,30 L55,10 L90,10 L105,30 L195,30 L210,10 L245,10 L260,30 L300,30" id="hudTracePath"/>
+    </svg>
+  </div>
+  <div class="hud-row">
+    <span class="hud-label">CAM</span>
+    <span class="hud-value" id="hudCam">ORBIT.AUTO</span>
+  </div>
+</div>
+
+<!-- ===================== AUDIO TOGGLE ===================== -->
+<button id="audioToggle" aria-label="Toggle sound">
+  <svg class="icon-sound-on" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16 8a5 5 0 010 8" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round"/><path d="M18.5 5.5a9 9 0 010 13" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" opacity="0.6"/></svg>
+  <svg class="icon-sound-off" viewBox="0 0 24 24" style="display:none"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+</button>
+
+<!-- ===================== MAIN CONTENT ===================== -->
+<main id="content">
+
+  <!-- HERO -->
+  <section id="hero" class="section panel-section">
+    <div class="hero-eyebrow-wrap">
+      <span class="eyebrow">BMW M GMBH &nbsp;—&nbsp; GENERATION VI</span>
+    </div>
+    <h1 class="hero-title">
+      <span class="hero-title-line hero-title-light">THE</span>
+      <span class="hero-title-line hero-title-bold">M4<span class="hero-title-accent">COMPETITION</span></span>
+    </h1>
+    <p class="hero-sub">Engineered obsession. 503 horsepower wrapped in carbon and intent.</p>
+    <div class="hero-scroll-cue">
+      <span>SCROLL</span>
+      <div class="scroll-cue-line"></div>
+    </div>
+    <div class="hero-controls">
+      <button class="ctrl-btn" id="ctrlRotateToggle" title="Pause/resume rotation">
+        <svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6a6 6 0 11-6 6H4a8 8 0 108-8z"/></svg>
+      </button>
+      <button class="ctrl-btn" id="ctrlReset" title="Reset camera">
+        <svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a5 5 0 11-5 5H5a7 7 0 107-7z"/></svg>
+      </button>
+      <button class="ctrl-btn" id="ctrlFullscreen" title="Fullscreen view">
+        <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+      </button>
+    </div>
+  </section>
+
+  <!-- OVERVIEW -->
+  <section id="overview" class="section panel-section">
+    <div class="section-frame">
+      <span class="section-index">01</span>
+      <h2 class="section-title">An obsession,<br/>given form.</h2>
+      <p class="section-copy">Every panel of the M4 Competition is shaped by airflow, not aesthetics alone — though the two were never meant to be separate. What you're looking at is the result of six generations of refinement, distilled into a single, unmistakable silhouette.</p>
+      <div class="overview-pills">
+        <div class="pill"><span class="pill-num">3.0L</span><span class="pill-label">Twin-Turbo Inline-6</span></div>
+        <div class="pill"><span class="pill-num">M xDrive</span><span class="pill-label">All-Wheel Drive</span></div>
+        <div class="pill"><span class="pill-num">Carbon</span><span class="pill-label">Roof &amp; Aero Pack</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PERFORMANCE -->
+  <section id="performance" class="section panel-section">
+    <div class="section-frame section-frame-right">
+      <span class="section-index">02</span>
+      <h2 class="section-title">Numbers that<br/>argue back.</h2>
+      <p class="section-copy">Specification, distilled to its essentials. No filler — just the figures that define how this car behaves at the limit.</p>
+    </div>
+    <div class="stat-grid" id="statGrid">
+      <div class="stat-card" data-target="503" data-suffix=" HP">
+        <span class="stat-value"><span class="stat-num">0</span><span class="stat-suffix"></span></span>
+        <span class="stat-label">Power Output</span>
+      </div>
+      <div class="stat-card" data-target="650" data-suffix=" Nm">
+        <span class="stat-value"><span class="stat-num">0</span><span class="stat-suffix"></span></span>
+        <span class="stat-label">Peak Torque</span>
+      </div>
+      <div class="stat-card" data-target="3.5" data-decimals="1" data-suffix="s">
+        <span class="stat-value"><span class="stat-num">0</span><span class="stat-suffix"></span></span>
+        <span class="stat-label">0–100 km/h</span>
+      </div>
+      <div class="stat-card" data-target="290" data-suffix=" km/h">
+        <span class="stat-value"><span class="stat-num">0</span><span class="stat-suffix"></span></span>
+        <span class="stat-label">Top Speed (M Driver's Pkg)</span>
+      </div>
+      <div class="stat-card" data-target="8" data-suffix="-Spd">
+        <span class="stat-value"><span class="stat-num">0</span><span class="stat-suffix"></span></span>
+        <span class="stat-label">M Steptronic Transmission</span>
+      </div>
+      <div class="stat-card" data-target="50" data-suffix="/50">
+        <span class="stat-value"><span class="stat-num">0</span><span class="stat-suffix"></span></span>
+        <span class="stat-label">Weight Distribution</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- EXTERIOR -->
+  <section id="exterior" class="section panel-section">
+    <div class="section-frame">
+      <span class="section-index">03</span>
+      <h2 class="section-title">Surface as<br/>strategy.</h2>
+      <p class="section-copy">The kidney grille inhales. The flared arches exhale. Every curve across the body was tested in a wind tunnel before it was ever allowed to look beautiful.</p>
+      <ul class="detail-list">
+        <li><span class="detail-dot"></span>Laser headlights with adaptive cornering</li>
+        <li><span class="detail-dot"></span>Carbon fibre reinforced roof — lowers centre of gravity</li>
+        <li><span class="detail-dot"></span>M Compound forged 19"/20" wheels</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- INTERIOR -->
+  <section id="interior" class="section panel-section">
+    <div class="section-frame section-frame-right">
+      <span class="section-index">04</span>
+      <h2 class="section-title">Cockpit,<br/>not cabin.</h2>
+      <p class="section-copy">M Carbon bucket seats hold you the way a good corner holds a tyre. Alcantara, brushed aluminium, and a driver display canted toward exactly one person.</p>
+      <ul class="detail-list">
+        <li><span class="detail-dot"></span>M Carbon bucket seats with illuminated badging</li>
+        <li><span class="detail-dot"></span>12.3" curved digital display</li>
+        <li><span class="detail-dot"></span>Alcantara headliner &amp; steering wheel</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- TECHNOLOGY / ENGINE -->
+  <section id="technology" class="section panel-section">
+    <div class="section-frame">
+      <span class="section-index">05</span>
+      <h2 class="section-title">S58. The heart<br/>of the matter.</h2>
+      <p class="section-copy">A closed-deck block, twin mono-scroll turbochargers, and a cooling system borrowed straight from the GT3 racing programme. This is not a tuned engine — it was born to do this.</p>
+      <div class="overview-pills">
+        <div class="pill"><span class="pill-num">M TwinPower</span><span class="pill-label">Turbo Technology</span></div>
+        <div class="pill"><span class="pill-num">Active</span><span class="pill-label">M Differential</span></div>
+        <div class="pill"><span class="pill-num">4</span><span class="pill-label">Drive Modes</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHEELS / BRAKES -->
+  <section id="wheels" class="section panel-section">
+    <div class="section-frame section-frame-right">
+      <span class="section-index">06</span>
+      <h2 class="section-title">Where power<br/>meets road.</h2>
+      <p class="section-copy">M Compound brakes with blue calipers haul the Competition down from speed with a bite that never fades — track after track, lap after lap.</p>
+    </div>
+  </section>
+
+  <!-- SPECIFICATIONS -->
+  <section id="specs" class="section panel-section">
+    <div class="specs-panel">
+      <span class="section-index">07</span>
+      <h2 class="section-title">Specification sheet.</h2>
+      <div class="specs-table" id="specsTable">
+        <div class="specs-row"><span>Engine</span><span>3.0L M TwinPower Turbo Inline-6</span></div>
+        <div class="specs-row"><span>Power</span><span>503 hp @ 6,250 rpm</span></div>
+        <div class="specs-row"><span>Torque</span><span>650 Nm @ 2,750–5,950 rpm</span></div>
+        <div class="specs-row"><span>0–100 km/h</span><span>3.5 seconds</span></div>
+        <div class="specs-row"><span>Top Speed</span><span>290 km/h (M Driver's Package)</span></div>
+        <div class="specs-row"><span>Transmission</span><span>8-Speed M Steptronic</span></div>
+        <div class="specs-row"><span>Drivetrain</span><span>M xDrive, AWD</span></div>
+        <div class="specs-row"><span>Weight Distribution</span><span>50:50 front/rear</span></div>
+        <div class="specs-row"><span>Curb Weight</span><span>1,725 kg</span></div>
+        <div class="specs-row"><span>Brakes</span><span>M Compound, blue calipers</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GALLERY / CAMERA PRESETS -->
+  <section id="gallery" class="section panel-section">
+    <div class="section-frame">
+      <span class="section-index">08</span>
+      <h2 class="section-title">Walk around it.</h2>
+      <p class="section-copy">Choose an angle. Let the camera do the rest.</p>
+      <div class="gallery-presets" id="galleryPresets">
+        <button class="preset-btn" data-preset="front">Front Quarter</button>
+        <button class="preset-btn" data-preset="side">Side Profile</button>
+        <button class="preset-btn" data-preset="rear">Rear Stance</button>
+        <button class="preset-btn" data-preset="top">Top Down</button>
+        <button class="preset-btn" data-preset="interior">Cockpit</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL SHOWCASE -->
+  <section id="showcase" class="section panel-section">
+    <div class="showcase-content">
+      <h2 class="showcase-title">THE M4<br/>COMPETITION</h2>
+      <p class="showcase-sub">Some cars are transportation. This one is an argument.</p>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section id="contact" class="section panel-section">
+    <div class="contact-panel">
+      <span class="section-index">09</span>
+      <h2 class="section-title">Configure yours.</h2>
+      <p class="section-copy">Start building your M4 Competition, or talk to a product specialist near you.</p>
+      <form class="contact-form" id="contactForm">
+        <div class="form-row">
+          <input type="text" placeholder="Full name" required />
+          <input type="email" placeholder="Email address" required />
+        </div>
+        <input type="text" placeholder="Postcode / City" />
+        <textarea placeholder="Tell us what you're looking for..." rows="3"></textarea>
+        <button type="submit" class="form-submit">Request a callback</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer id="siteFooter">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <span class="footer-logo">M4</span>
+        <p>BMW M GmbH — The pursuit of velocity, since 1972.</p>
+      </div>
+      <div class="footer-cols">
+        <div class="footer-col">
+          <h4>Model</h4>
+          <a href="#overview">Overview</a>
+          <a href="#performance">Performance</a>
+          <a href="#specs">Specifications</a>
+        </div>
+        <div class="footer-col">
+          <h4>Explore</h4>
+          <a href="#gallery">Gallery</a>
+          <a href="#interior">Interior</a>
+          <a href="#contact">Configure</a>
+        </div>
+        <div class="footer-col">
+          <h4>Connect</h4>
+          <a href="#">Instagram</a>
+          <a href="#">YouTube</a>
+          <a href="#">Press Kit</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 BMW M GmbH — Concept Showcase. Not an official BMW property.</span>
+      <span>Fuel consumption &amp; emissions data available on request.</span>
+    </div>
+  </footer>
+
+</main>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
