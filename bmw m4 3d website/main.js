@@ -6,7 +6,7 @@ import Lenis from 'lenis';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import { createScene } from './scene.js';
-import { loadCar, collectHeadlightMaterials, collectBodyMaterials } from './carLoader.js';
+import { loadCar, collectHeadlightMaterials, collectBodyMaterials, disposeLoader } from './carLoader.js';
 import { CAMERA_KEYFRAMES, GALLERY_PRESETS, sampleCameraPath } from './cameraPath.js';
 import * as Audio from './audio.js';
 
@@ -944,6 +944,7 @@ window.__bmwScene = {
   },
   dispose: () => {
     disposeScene();
+    disposeLoader();
     if (controls) {
       controls.dispose();
       controls = null;

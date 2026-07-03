@@ -5,19 +5,35 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 const GLB_PATH = './assets/bmw-m4.glb';
 
+let dracoLoader = null;
+let loader = null;
+
+function getLoader() {
+  if (!loader) {
+    dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('./assets/draco/');
+    loader = new GLTFLoader();
+    loader.setDRACOLoader(dracoLoader);
+  }
+  return loader;
+}
+
+export function disposeLoader() {
+  if (dracoLoader) {
+    dracoLoader.dispose();
+    dracoLoader = null;
+  }
+  loader = null;
+}
+
 export function loadCar(scene, onProgress){
   return new Promise((resolve, reject) => {
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('./assets/draco/');
+    const gltfLoader = getLoader();
 
-    const loader = new GLTFLoader();
-    loader.setDRACOLoader(dracoLoader);
-
-    loader.load(
+    gltfLoader.load(
       GLB_PATH,
       (gltf) => {
         const car = gltf.scene;
-        dracoLoader.dispose();
 
         // Normalize scale & center the model
         const box = new THREE.Box3().setFromObject(car);

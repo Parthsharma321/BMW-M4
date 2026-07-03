@@ -1,6 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+  // Force trailing slash on subdirectory paths (e.g. GitHub Pages / Vercel) to prevent relative asset 404s
+  (function() {
+    const loc = window.location;
+    if (loc.pathname && !loc.pathname.endsWith('/') && !loc.pathname.split('/').pop().includes('.')) {
+      loc.replace(loc.origin + loc.pathname + '/' + loc.search + loc.hash);
+    }
+  })();
+
+  // Unregister any active service workers on this origin to prevent cache hijacking from other projects
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister().then((success) => {
+          if (success) {
+            console.log('[ServiceWorker] Unregistered active worker successfully. Reloading...');
+            window.location.reload();
+          }
+        });
+      }
+    });
+  }
+</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>M4 COMPETITION — The Pursuit of Velocity</title>
@@ -22,7 +45,7 @@
 }
 </script>
 
-<link rel="stylesheet" href="style.css?v=3.2" />
+<link rel="stylesheet" href="style.css?v=3.3" />
 <noscript>
   <style>
     #loader { display: none !important; }
@@ -419,6 +442,6 @@
     });
   }
 </script>
-<script type="module" src="main.js?v=3.2"></script>
+<script type="module" src="main.js?v=3.3"></script>
 </body>
 </html>
