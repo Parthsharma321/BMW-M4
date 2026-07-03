@@ -6,13 +6,20 @@ let masterGain = null;
 let engineNodes = null;
 let muted = true;
 let started = false;
+let analyser = null;
 
 function ensureContext(){
   if (!ctx){
     ctx = new (window.AudioContext || window.webkitAudioContext)();
     masterGain = ctx.createGain();
     masterGain.gain.value = muted ? 0 : 0.5;
-    masterGain.connect(ctx.destination);
+
+    // Create AnalyserNode for HUD real-time engine visualizer
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 64; // Small fft size for waveform visualizer
+
+    masterGain.connect(analyser);
+    analyser.connect(ctx.destination);
   }
   return ctx;
 }
@@ -120,4 +127,15 @@ export function updateEngineFromScroll(velocity){
   engineNodes.osc1.frequency.linearRampToValueAtTime(targetFreq, now + 0.15);
   engineNodes.osc2.frequency.linearRampToValueAtTime(targetFreq * 1.015, now + 0.15);
   engineNodes.humGain.gain.linearRampToValueAtTime(targetGain, now + 0.2);
+}
+
+// Exported helpers for telemetry HUD visualizations
+export function getAnalyserData(array) {
+  if (analyser) {
+    analyser.getByteFrequencyData(array);
+  }
+}
+
+export function getAnalyserFrequencyBinCount() {
+  return analyser ? analyser.frequencyBinCount : 0;
 }

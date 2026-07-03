@@ -83,14 +83,24 @@ export const CAMERA_KEYFRAMES = [
 
 // Named presets for the gallery "walk around it" buttons — absolute camera states
 export const GALLERY_PRESETS = {
-  front: { pos: new THREE.Vector3(0, 70, 420), look: new THREE.Vector3(0, 45, 0), fov: 28 },
-  side:  { pos: new THREE.Vector3(460, 65, 0), look: new THREE.Vector3(0, 45, 0), fov: 26 },
-  rear:  { pos: new THREE.Vector3(0, 70, -420), look: new THREE.Vector3(0, 45, 0), fov: 28 },
-  top:   { pos: new THREE.Vector3(0, 380, 10), look: new THREE.Vector3(0, 0, 0), fov: 30 },
-  interior: { pos: new THREE.Vector3(100, 65, 130), look: new THREE.Vector3(0, 45, 0), fov: 22 },
+  front: { pos: new THREE.Vector3(0, 70, 420), look: new THREE.Vector3(0, 45, 0), fov: 28, up: new THREE.Vector3(0, 1, 0) },
+  side:  { pos: new THREE.Vector3(460, 65, 0), look: new THREE.Vector3(0, 45, 0), fov: 26, up: new THREE.Vector3(0, 1, 0) },
+  rear:  { pos: new THREE.Vector3(0, 70, -420), look: new THREE.Vector3(0, 45, 0), fov: 28, up: new THREE.Vector3(0, 1, 0) },
+  top:   { pos: new THREE.Vector3(0, 440, 0), look: new THREE.Vector3(0, 45, 0), fov: 30, up: new THREE.Vector3(0, 0, -1) },
+  interior: { pos: new THREE.Vector3(-28, 66, -15), look: new THREE.Vector3(-26, 48, 100), fov: 70, up: new THREE.Vector3(0, 1, 0) },
 };
 
 // Catmull-Rom-ish smooth interpolation across keyframes using a global scroll progress [0,1]
+const cachedPos = new THREE.Vector3();
+const cachedLook = new THREE.Vector3();
+const cachedResult = {
+  pos: cachedPos,
+  look: cachedLook,
+  fov: 0,
+  index: 0,
+  t: 0
+};
+
 export function sampleCameraPath(progress, keyframes){
   const n = keyframes.length;
   const scaled = progress * (n - 1);
@@ -103,15 +113,17 @@ export function sampleCameraPath(progress, keyframes){
   const kC = keyframes[i1];
   const kD = keyframes[Math.min(i1 + 1, n - 1)];
 
-  const pos = catmullRomVec3(kA.pos, kB.pos, kC.pos, kD.pos, t);
-  const look = catmullRomVec3(kA.look, kB.look, kC.look, kD.look, t);
-  const fov = catmullRomScalar(kA.fov, kB.fov, kC.fov, kD.fov, t);
+  catmullRomVec3(cachedPos, kA.pos, kB.pos, kC.pos, kD.pos, t);
+  catmullRomVec3(cachedLook, kA.look, kB.look, kC.look, kD.look, t);
+  cachedResult.fov = catmullRomScalar(kA.fov, kB.fov, kC.fov, kD.fov, t);
+  cachedResult.index = i0;
+  cachedResult.t = t;
 
-  return { pos, look, fov, index: i0, t };
+  return cachedResult;
 }
 
-function catmullRomVec3(p0, p1, p2, p3, t){
-  return new THREE.Vector3(
+function catmullRomVec3(out, p0, p1, p2, p3, t){
+  out.set(
     catmullRomScalar(p0.x, p1.x, p2.x, p3.x, t),
     catmullRomScalar(p0.y, p1.y, p2.y, p3.y, t),
     catmullRomScalar(p0.z, p1.z, p2.z, p3.z, t)

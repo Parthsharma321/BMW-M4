@@ -3,16 +3,12 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import { createScene } from './scene.js';
-import { loadCar, collectHeadlightMaterials } from './carLoader.js';
+import { loadCar, collectHeadlightMaterials, collectBodyMaterials } from './carLoader.js';
 import { CAMERA_KEYFRAMES, GALLERY_PRESETS, sampleCameraPath } from './cameraPath.js';
 import * as Audio from './audio.js';
-
-// Flip the CSS gate the moment this module successfully executes — see the
-// "JS-READY GATING" block in style.css. If this module throws or never loads,
-// html stays without .js-ready and the page falls back to fully visible content.
-document.documentElement.classList.add('js-ready');
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -27,6 +23,7 @@ const state = {
   mouse: { x: 0, y: 0, targetX: 0, targetY: 0 },
   activePreset: null,
   galleryActive: false,
+  freehandMode: false,
   prefersReducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   carReady: false,
   idleSpinAngle: 0,
@@ -34,14 +31,47 @@ const state = {
 };
 
 /* ============================================================
+   CLEANUP PREVIOUS INSTANCE (Prevent soft-refresh memory leaks & CPU freezes)
+   ============================================================ */
+if (window.__bmwScene) {
+  console.log('[BMW M4] Cleaning up previous instance...');
+  try {
+    if (window.__bmwScene.stop) window.__bmwScene.stop();
+    if (window.__bmwScene.dispose) window.__bmwScene.dispose();
+  } catch (e) {
+    console.error('Error disposing previous instance:', e);
+  }
+}
+
+/* ============================================================
    SCENE SETUP
    ============================================================ */
 const canvas = document.getElementById('webgl');
-const { scene, camera, renderer, composer, accentLight, accentLight2 } = createScene(canvas);
+const { scene, camera, renderer, composer, useComposer, accentLight, accentLight2, dispose: disposeScene } = createScene(canvas);
+
+canvas.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+  console.warn('[WebGL] Context lost. Pausing rendering loop...');
+  if (animFrameId) {
+    cancelAnimationFrame(animFrameId);
+    animFrameId = null;
+  }
+}, false);
+
+canvas.addEventListener('webglcontextrestored', () => {
+  console.log('[WebGL] Context restored. Re-initializing scene...');
+  window.location.reload();
+}, false);
 
 let car = null;
+let controls = null;
 let headlightMats = [];
+let bodyPaintMats = [];
+let visualizerCanvas = null;
+let visualizerCtx = null;
+let visualizerDataArray = null;
 const clock = new THREE.Clock();
+let animFrameId = null;
 
 /* ============================================================
    LOADER UI
@@ -113,41 +143,175 @@ function initSmoothScroll(){
 /* ============================================================
    INIT SEQUENCE
    ============================================================ */
+let animationsInitialized = false;
+let loopStarted = false;
+let currentLoadId = 0;
+
 async function init(){
   initSmoothScroll();
   Audio.initAudioOnFirstGesture();
 
+  visualizerCanvas = document.getElementById('hudVisualizer');
+  if (visualizerCanvas) {
+    visualizerCtx = visualizerCanvas.getContext('2d');
+  }
+
+  await attemptLoad();
+}
+
+async function attemptLoad(){
+  currentLoadId++;
+  const thisLoadId = currentLoadId;
+  const errorEl = document.getElementById('loaderError');
+  const errorMsgEl = errorEl.querySelector('.error-msg');
+  const loaderPctEl = document.getElementById('loaderPct');
+  const barFillEl = document.getElementById('loaderBarFill');
+
+  // Reset UI states
+  errorEl.style.display = 'none';
+  loaderPctEl.style.display = 'block';
+  barFillEl.parentElement.style.display = 'block';
+  updateLoaderProgress(0);
+
+  // If there's an existing car in the scene, remove it to prevent duplicates
+  if (car) {
+    scene.remove(car);
+    car = null;
+    state.carReady = false;
+  }
+
   try {
-    const result = await loadCar(scene, updateLoaderProgress);
+    // 25-second loading timeout for large assets over slow networks
+    const loadPromise = loadCar(scene, updateLoaderProgress);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Connection timeout. Please check your network and retry.')), 25000)
+    );
+
+    const result = await Promise.race([loadPromise, timeoutPromise]);
+    
+    // Check if this load attempt was superseded by a newer click retry
+    if (thisLoadId !== currentLoadId) {
+      console.log('Discarded superseded car load request:', thisLoadId);
+      return;
+    }
+
     car = result.car;
+    scene.add(car); // Add the mesh to the scene here
+    renderer.shadowMap.needsUpdate = true; // Compile static shadows once on load
     headlightMats = collectHeadlightMaterials(car);
+    bodyPaintMats = collectBodyMaterials(car);
     state.carReady = true;
 
-    // cameraPath.js was authored assuming a car ~460 units long. If the model's
-    // actual loaded size differs (this can happen depending on how the source GLB's
-    // nested node scales compose), rescale every camera distance by the same ratio
-    // so the framing stays correct regardless of the model's true size — rather than
-    // the camera being calibrated for a car of a different size than what's on screen.
+    initPaintConfigurator();
+
     const ASSUMED_CAR_LENGTH = 460;
     const actualCarLength = Math.max(result.dimensions.x, result.dimensions.y, result.dimensions.z);
     cameraScaleCorrection = actualCarLength / ASSUMED_CAR_LENGTH;
     console.log('[BMW M4 diagnostic] actual car length:', actualCarLength.toFixed(1),
       '— camera scale correction factor:', cameraScaleCorrection.toFixed(3));
+
+    // Minimum show time for the loader so the silhouette animation can be appreciated
+    await new Promise((r) => setTimeout(r, 600));
+    await hideLoader();
+
+    playIntroSequence();
+    
+    if (!animationsInitialized){
+      initScrollAnimations();
+      initUIInteractions();
+      initSectionRail();
+      initNavScrollEffects();
+      animationsInitialized = true;
+    }
+    if (!loopStarted){
+      animate();
+      loopStarted = true;
+    }
   } catch (err) {
     console.error('Failed to load BMW M4 model:', err);
-    loaderPct.textContent = 'Failed to load model';
+    // Only display error state if this load attempt wasn't superseded
+    if (thisLoadId === currentLoadId) {
+      loaderPctEl.style.display = 'none';
+      barFillEl.parentElement.style.display = 'none';
+      errorMsgEl.textContent = err.message || 'Failed to load model. Connection error.';
+      errorEl.style.display = 'flex';
+    }
+  }
+}
+
+function initPaintConfigurator() {
+  const dots = document.querySelectorAll('.color-dot');
+  dots.forEach(dot => {
+    dot.addEventListener('click', () => {
+      dots.forEach(d => d.classList.remove('is-active'));
+      dot.classList.add('is-active');
+
+      const colorHex = dot.getAttribute('data-color');
+      const threeColor = new THREE.Color(colorHex);
+
+      bodyPaintMats.forEach(m => {
+        gsap.to(m.color, {
+          r: threeColor.r,
+          g: threeColor.g,
+          b: threeColor.b,
+          duration: 0.8,
+          ease: 'power2.out'
+        });
+      });
+      Audio.playClick();
+    });
+  });
+}
+
+function drawVisualizer() {
+  if (!visualizerCtx || !visualizerCanvas) return;
+  const w = visualizerCanvas.width;
+  const h = visualizerCanvas.height;
+  visualizerCtx.clearRect(0, 0, w, h);
+
+  if (!visualizerDataArray) {
+    const bins = Audio.getAnalyserFrequencyBinCount();
+    if (bins > 0) {
+      visualizerDataArray = new Uint8Array(bins);
+    }
   }
 
-  // Minimum show time for the loader so the silhouette animation can be appreciated
-  await new Promise((r) => setTimeout(r, 600));
-  await hideLoader();
+  if (visualizerDataArray) {
+    Audio.getAnalyserData(visualizerDataArray);
+  }
 
-  playIntroSequence();
-  initScrollAnimations();
-  initUIInteractions();
-  initSectionRail();
-  initNavScrollEffects();
-  animate();
+  const barCount = 18;
+  const barWidth = w / barCount - 2;
+  
+  const grad = visualizerCtx.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0, '#3ad6ff');
+  grad.addColorStop(0.5, '#1c3fa8');
+  grad.addColorStop(1, '#e6293c');
+
+  visualizerCtx.fillStyle = grad;
+
+  for (let i = 0; i < barCount; i++) {
+    let value = 0;
+    if (visualizerDataArray && !Audio.isMuted()) {
+      const dataIdx = Math.floor((i / barCount) * visualizerDataArray.length);
+      value = visualizerDataArray[dataIdx] / 255;
+    } else {
+      const elapsed = clock.getElapsedTime();
+      value = 0.08 + Math.sin(elapsed * 4 + i * 0.4) * 0.04;
+    }
+
+    const revMultiplier = 1.0 + Math.min(Math.abs(state.scrollVelocity) * 0.005, 2.5);
+    const finalValue = Math.min(value * revMultiplier, 1.0);
+    const barHeight = Math.max(finalValue * h, 3);
+
+    const x = i * (barWidth + 2);
+    const y = h - barHeight;
+
+    visualizerCtx.shadowColor = 'rgba(58,214,255,0.25)';
+    visualizerCtx.shadowBlur = 4;
+    visualizerCtx.fillRect(x, y, barWidth, barHeight);
+  }
+  visualizerCtx.shadowBlur = 0;
 }
 
 init();
@@ -162,9 +326,10 @@ function playIntroSequence(){
     .to('.hero-title-light', { y: 0, duration: 1.0 }, 0.25)
     .to('.hero-title-bold', { y: 0, duration: 1.1 }, 0.4)
     .to('.hero-sub', { y: 0, opacity: 1, duration: 0.9 }, 0.75)
-    .to('.hero-scroll-cue', { opacity: 1, duration: 0.8 }, 1.0)
-    .to('.hero-controls', { opacity: 1, duration: 0.8 }, 1.0)
-    .to('#telemetryHud', { duration: 0.1 }, 1.1, () => {
+    .to('.hero-cta-wrap', { y: 0, opacity: 1, duration: 0.9 }, 0.85)
+    .to('.hero-scroll-cue', { opacity: 1, duration: 0.8 }, 1.1)
+    .to('.hero-controls', { opacity: 1, duration: 0.8 }, 1.1)
+    .to('#telemetryHud', { duration: 0.1 }, 1.2, () => {
       document.getElementById('telemetryHud').classList.add('is-visible');
     });
 
@@ -199,6 +364,15 @@ function exitGalleryMode(){
   state.activePreset = null;
   document.querySelectorAll('.preset-btn').forEach((b) => b.classList.remove('is-active'));
   document.getElementById('hudCam').textContent = state.autoRotate ? 'ORBIT.AUTO' : 'ORBIT.MANUAL';
+
+  // Smoothly transition camera up vector back to default (0, 1, 0) to prevent orientations locks
+  gsap.to(camera.up, {
+    x: 0,
+    y: 1,
+    z: 0,
+    duration: 1.2,
+    ease: 'power2.out'
+  });
 }
 
 function initScrollAnimations(){
@@ -325,6 +499,34 @@ const SECTION_LABELS = {
   showcase: '09 / SHOWCASE', contact: '10 / CONTACT',
 };
 
+const SECTION_COLORS = {
+  hero: '#3ad6ff',
+  overview: '#3ad6ff',
+  performance: '#e6293c',
+  exterior: '#07513b',
+  interior: '#07513b',
+  technology: '#cbd622',
+  wheels: '#cbd622',
+  specs: '#1c3fa8',
+  gallery: '#1c3fa8',
+  showcase: '#3ad6ff',
+  contact: '#e6293c'
+};
+
+const SECTION_BLOB_POSITIONS = {
+  hero: { top: '30%', left: '20%' },
+  overview: { top: '50%', left: '15%' },
+  performance: { top: '65%', left: '85%' },
+  exterior: { top: '40%', left: '20%' },
+  interior: { top: '75%', left: '80%' },
+  technology: { top: '50%', left: '15%' },
+  wheels: { top: '60%', left: '85%' },
+  specs: { top: '45%', left: '20%' },
+  gallery: { top: '50%', left: '50%' },
+  showcase: { top: '35%', left: '80%' },
+  contact: { top: '60%', left: '25%' }
+};
+
 function initSectionRail(){
   const railFill = document.getElementById('railFillPath');
   railFill.style.strokeDasharray = '400';
@@ -349,6 +551,39 @@ function initSectionRail(){
     document.querySelectorAll('.nav-links a, #mobileMenu a').forEach((a) => {
       a.classList.toggle('is-active', a.dataset.section === id);
     });
+
+    const activeColor = SECTION_COLORS[id] || '#3ad6ff';
+    const threeColor = new THREE.Color(activeColor);
+
+    document.documentElement.style.setProperty('--active-accent', activeColor);
+
+    // Smooth transition for 3D accent lights to match section theme
+    if (accentLight) {
+      gsap.to(accentLight.color, {
+        r: threeColor.r,
+        g: threeColor.g,
+        b: threeColor.b,
+        duration: 1.2,
+        ease: 'power2.out'
+      });
+    }
+    if (accentLight2) {
+      gsap.to(accentLight2.color, {
+        r: threeColor.r,
+        g: threeColor.g,
+        b: threeColor.b,
+        duration: 1.2,
+        ease: 'power2.out'
+      });
+    }
+
+    // Smoothly shift the background glow radial blob position
+    const blob = document.getElementById('glowBgBlob');
+    if (blob) {
+      const pos = SECTION_BLOB_POSITIONS[id] || { top: '50%', left: '50%' };
+      blob.style.top = pos.top;
+      blob.style.left = pos.left;
+    }
   }
 }
 
@@ -380,6 +615,71 @@ function initNavScrollEffects(){
    mobile menu, audio toggle, nav links
    ============================================================ */
 function initUIInteractions(){
+  // Freehand Mode Toggle
+  const freehandBtn = document.getElementById('navFreehandBtn');
+  if (freehandBtn) {
+    freehandBtn.addEventListener('click', () => {
+      Audio.playClick();
+      if (!state.freehandMode) {
+        // Enter Freehand Mode
+        state.freehandMode = true;
+        document.body.classList.add('is-freehand-active');
+        freehandBtn.textContent = 'EXIT FREEHAND';
+        freehandBtn.classList.add('is-active');
+        lenis.stop();
+
+        // Initialize OrbitControls
+        if (!controls) {
+          controls = new OrbitControls(camera, renderer.domElement);
+          controls.enableDamping = true;
+          controls.dampingFactor = 0.05;
+          controls.maxPolarAngle = Math.PI / 2 - 0.05; // Prevent camera from dipping below the floor
+          controls.minDistance = 180 * cameraScaleCorrection;
+          controls.maxDistance = 750 * cameraScaleCorrection;
+        }
+        controls.target.set(0, 45, 0).multiplyScalar(cameraScaleCorrection);
+        controls.enabled = true;
+
+        // Smoothly transition camera to a cinematic starting orbit position
+        gsap.to(camera.position, {
+          x: -160 * cameraScaleCorrection,
+          y: 85 * cameraScaleCorrection,
+          z: 385 * cameraScaleCorrection,
+          duration: 1.4,
+          ease: 'power2.out',
+          onComplete: () => {
+            controls.update();
+          }
+        });
+      } else {
+        // Exit Freehand Mode
+        state.freehandMode = false;
+        document.body.classList.remove('is-freehand-active');
+        freehandBtn.textContent = 'FREEHAND 3D';
+        freehandBtn.classList.remove('is-active');
+
+        if (controls) {
+          controls.enabled = false;
+        }
+        lenis.start();
+
+        // Smoothly return camera to path scroll position
+        const sample = sampleCameraPath(cameraDriveProgress, CAMERA_KEYFRAMES);
+        gsap.to(camera.position, {
+          x: sample.pos.x * cameraScaleCorrection,
+          y: sample.pos.y * cameraScaleCorrection,
+          z: sample.pos.z * cameraScaleCorrection,
+          duration: 1.4,
+          ease: 'power2.inOut',
+          onComplete: () => {
+            tmpLookTarget.copy(sample.look).multiplyScalar(cameraScaleCorrection);
+            camera.lookAt(tmpLookTarget);
+          }
+        });
+      }
+    });
+  }
+
   // Auto-rotate pause/resume
   const rotateBtn = document.getElementById('ctrlRotateToggle');
   rotateBtn.addEventListener('click', () => {
@@ -420,10 +720,36 @@ function initUIInteractions(){
       const presetKey = btn.dataset.preset;
       state.activePreset = presetKey;
       state.galleryActive = true;
+
+      // Pause auto-rotation when viewing a static preset angle
+      state.autoRotate = false;
+      const rotateBtn = document.getElementById('ctrlRotateToggle');
+      if (rotateBtn) {
+        rotateBtn.classList.add('is-active');
+      }
       document.getElementById('hudCam').textContent = `PRESET.${presetKey.toUpperCase()}`;
 
       const preset = GALLERY_PRESETS[presetKey];
       if (preset && !state.prefersReducedMotion){
+        // Smoothly animate the car's rotation back to 0 so it aligns with the camera keyframe
+        if (car) {
+          gsap.to(car.rotation, {
+            y: 0,
+            duration: 1.4,
+            ease: 'power2.inOut'
+          });
+        }
+
+        // Animate camera up vector to support looking straight down without locks
+        const targetUp = preset.up || new THREE.Vector3(0, 1, 0);
+        gsap.to(camera.up, {
+          x: targetUp.x,
+          y: targetUp.y,
+          z: targetUp.z,
+          duration: 1.6,
+          ease: 'power3.inOut'
+        });
+
         gsap.to(camera.position, {
           x: preset.pos.x * cameraScaleCorrection,
           y: preset.pos.y * cameraScaleCorrection,
@@ -436,6 +762,9 @@ function initUIInteractions(){
           onUpdate: () => camera.updateProjectionMatrix(),
         });
       } else if (preset){
+        if (car) car.rotation.y = 0;
+        const targetUp = preset.up || new THREE.Vector3(0, 1, 0);
+        camera.up.copy(targetUp);
         camera.position.copy(preset.pos).multiplyScalar(cameraScaleCorrection);
         camera.fov = preset.fov;
         camera.updateProjectionMatrix();
@@ -502,13 +831,22 @@ function initUIInteractions(){
     state.mouse.targetX = (e.clientX / window.innerWidth - 0.5) * 2;
     state.mouse.targetY = (e.clientY / window.innerHeight - 0.5) * 2;
   });
+
+  // Loader retry button click listener
+  const retryBtn = document.getElementById('loaderRetryBtn');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => {
+      Audio.playClick();
+      attemptLoad();
+    });
+  }
 }
 
 /* ============================================================
    RENDER LOOP
    ============================================================ */
 function animate(){
-  requestAnimationFrame(animate);
+  animFrameId = requestAnimationFrame(animate);
   const delta = clock.getDelta();
   const elapsed = clock.getElapsedTime();
 
@@ -517,7 +855,9 @@ function animate(){
   state.mouse.y += (state.mouse.targetY - state.mouse.y) * 0.04;
 
   if (car && state.carReady){
-    if (!state.galleryActive){
+    if (state.freehandMode) {
+      if (controls) controls.update();
+    } else if (!state.galleryActive){
       const sample = sampleCameraPath(cameraDriveProgress, CAMERA_KEYFRAMES);
 
       // base camera position from path, rescaled to match the model's real size
@@ -580,10 +920,48 @@ function animate(){
     accentLight2.position.z = Math.sin(elapsed * 0.3) * -140;
   }
 
-  composer.render();
+  // Draw telemetry visualizer frame
+  drawVisualizer();
+
+  if (useComposer && composer) {
+    composer.render();
+  } else {
+    renderer.render(scene, camera);
+  }
 }
 
 /* expose for other modules in this file scope via window for debugging if needed */
-window.__bmwScene = { scene, camera, renderer, car: () => car };
+window.__bmwScene = {
+  scene,
+  camera,
+  renderer,
+  car: () => car,
+  stop: () => {
+    if (animFrameId) {
+      cancelAnimationFrame(animFrameId);
+      animFrameId = null;
+    }
+  },
+  dispose: () => {
+    disposeScene();
+    if (controls) {
+      controls.dispose();
+      controls = null;
+    }
+    if (car) {
+      car.traverse((node) => {
+        if (node.isMesh) {
+          if (node.geometry) node.geometry.dispose();
+          if (node.material) {
+            const mats = Array.isArray(node.material) ? node.material : [node.material];
+            mats.forEach(m => {
+              if (m.dispose) m.dispose();
+            });
+          }
+        }
+      });
+    }
+  }
+};
 
 export { scene, camera, renderer, car, state };

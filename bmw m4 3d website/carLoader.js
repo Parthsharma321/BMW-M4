@@ -8,7 +8,7 @@ const GLB_PATH = './assets/bmw-m4.glb';
 export function loadCar(scene, onProgress){
   return new Promise((resolve, reject) => {
     const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+    dracoLoader.setDecoderPath('./assets/draco/');
 
     const loader = new GLTFLoader();
     loader.setDRACOLoader(dracoLoader);
@@ -17,6 +17,7 @@ export function loadCar(scene, onProgress){
       GLB_PATH,
       (gltf) => {
         const car = gltf.scene;
+        dracoLoader.dispose();
 
         // Normalize scale & center the model
         const box = new THREE.Box3().setFromObject(car);
@@ -46,7 +47,6 @@ export function loadCar(scene, onProgress){
         enhanceMaterials(car);
         enableShadows(car);
 
-        scene.add(car);
         console.log('[BMW M4 diagnostic] raw box size (pre-scale):', size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2));
         console.log('[BMW M4 diagnostic] scaleFactor applied:', scaleFactor.toFixed(4));
         console.log('[BMW M4 diagnostic] final scaled size:', size2.x.toFixed(1), size2.y.toFixed(1), size2.z.toFixed(1));
@@ -84,11 +84,26 @@ function enhanceMaterials(root){
 
   root.traverse((node) => {
     if (!node.isMesh || !node.material) return;
+
+    const nodeName = (node.name || '').toLowerCase();
+    const isSteeringMesh = /steering|strng/i.test(nodeName);
+
     const isArrayMat = Array.isArray(node.material);
     const mats = isArrayMat ? node.material : [node.material];
 
     const resultMats = mats.map((mat) => {
       if (!mat) return mat;
+
+      if (isSteeringMesh) {
+        // Clone shared materials to prevent coloring the seats/dash/belts black
+        const clonedMat = mat.clone();
+        clonedMat.color = new THREE.Color(0x0a0a0a); // Deep premium charcoal/black
+        clonedMat.roughness = 0.8;
+        clonedMat.metalness = 0.1;
+        clonedMat.envMapIntensity = 0.5;
+        return clonedMat;
+      }
+
       if (!(mat instanceof THREE.MeshStandardMaterial) && !(mat instanceof THREE.MeshPhysicalMaterial)){
         return mat;
       }
@@ -182,6 +197,8 @@ function enhanceMaterials(root){
       return mat;
     }
 
+
+
     if (isInterior){
       mat.metalness = Math.min(mat.metalness ?? 0.2, 0.3);
       mat.roughness = Math.max(mat.roughness ?? 0.6, 0.55);
@@ -223,6 +240,28 @@ export function collectHeadlightMaterials(car){
         }
       });
     }
+  });
+  return result;
+}
+
+export function collectBodyMaterials(car){
+  const result = [];
+  const seen = new Set();
+  car.traverse((node) => {
+    if (!node.isMesh || !node.material) return;
+    const mats = Array.isArray(node.material) ? node.material : [node.material];
+    mats.forEach((m) => {
+      if (!m) return;
+      const ctx = ((node.name || '') + ' ' + (node.parent?.name || '') + ' ' + (m.name || '')).toLowerCase();
+      const isBody = /body|bumper|skirt|spoiler|fgrll|grille|tailpiece|fin/.test(ctx);
+      const isGlass = /glass|windshield|window/.test(ctx) || m.transparent;
+      if (isBody && !isGlass){
+        if (!seen.has(m.uuid)){
+          seen.add(m.uuid);
+          result.push(m);
+        }
+      }
+    });
   });
   return result;
 }

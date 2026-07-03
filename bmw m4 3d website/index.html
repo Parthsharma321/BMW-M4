@@ -8,21 +8,43 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@700&family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <script type="importmap">
 {
   "imports": {
-    "three": "https://esm.sh/three@0.165.0",
-    "three/addons/": "https://esm.sh/three@0.165.0/examples/jsm/",
-    "gsap": "https://esm.sh/gsap@3.12.5",
-    "gsap/ScrollTrigger": "https://esm.sh/gsap@3.12.5/ScrollTrigger",
-    "lenis": "https://esm.sh/lenis@1.1.13"
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/",
+    "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.5/+esm",
+    "gsap/ScrollTrigger": "https://cdn.jsdelivr.net/npm/gsap@3.12.5/ScrollTrigger/+esm",
+    "lenis": "https://cdn.jsdelivr.net/npm/lenis@1.1.13/+esm"
   }
 }
 </script>
 
-<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="style.css?v=3.2" />
+<noscript>
+  <style>
+    #loader { display: none !important; }
+    #webgl { display: none !important; }
+    #vignette, #grain, #sectionRail, #telemetryHud, #audioToggle { display: none !important; }
+    .eyebrow,
+    .hero-title-light,
+    .hero-title-bold,
+    .hero-sub,
+    .hero-scroll-cue,
+    .hero-controls,
+    .section-frame,
+    .stat-grid,
+    .specs-panel,
+    .showcase-content,
+    .contact-panel {
+      opacity: 1 !important;
+      transform: none !important;
+      filter: none !important;
+    }
+  </style>
+</noscript>
 </head>
 <body>
 
@@ -40,6 +62,10 @@
       <div class="loader-bar-fill" id="loaderBarFill"></div>
     </div>
     <div class="loader-pct" id="loaderPct">0%</div>
+    <div id="loaderError" class="loader-error">
+      <p class="error-msg"></p>
+      <button class="retry-btn" id="loaderRetryBtn">RETRY CONNECTION</button>
+    </div>
   </div>
   <div class="loader-particles" id="loaderParticles"></div>
 </div>
@@ -64,6 +90,7 @@
       <a href="#specs" data-section="specs">Specs</a>
       <a href="#contact" data-section="contact">Contact</a>
     </div>
+    <button class="nav-cta nav-cta-outline" id="navFreehandBtn">FREEHAND 3D</button>
     <button class="nav-cta" id="navConfigure">Configure</button>
     <button class="nav-burger" id="navBurger" aria-label="Open menu">
       <span></span><span></span><span></span>
@@ -98,13 +125,24 @@
     <span class="hud-value" id="hudSection">00 / HERO</span>
   </div>
   <div class="hud-trace">
-    <svg viewBox="0 0 300 40" preserveAspectRatio="none">
-      <path d="M0,30 L40,30 L55,10 L90,10 L105,30 L195,30 L210,10 L245,10 L260,30 L300,30" id="hudTracePath"/>
-    </svg>
+    <canvas id="hudVisualizer" width="280" height="36"></canvas>
   </div>
   <div class="hud-row">
     <span class="hud-label">CAM</span>
     <span class="hud-value" id="hudCam">ORBIT.AUTO</span>
+  </div>
+</div>
+
+<!-- ===================== PAINT CONFIGURATOR ===================== -->
+<div id="paintConfigurator">
+  <span class="config-label">M4 EXTERIOR PAINT</span>
+  <div class="color-options">
+    <button class="color-dot is-active" data-color="#0038a8" title="Portimao Blue" style="--color-hex: #1c3fa8;"></button>
+    <button class="color-dot" data-color="#022b1f" title="Isle of Man Green" style="--color-hex: #07513b;"></button>
+    <button class="color-dot" data-color="#9b0f0f" title="Toronto Red" style="--color-hex: #d1261b;"></button>
+    <button class="color-dot" data-color="#a2b00f" title="Sao Paulo Yellow" style="--color-hex: #cbd622;"></button>
+    <button class="color-dot" data-color="#050505" title="Black Sapphire" style="--color-hex: #17181c;"></button>
+    <button class="color-dot" data-color="#d1d5db" title="Alpine White" style="--color-hex: #f2f4f7;"></button>
   </div>
 </div>
 
@@ -113,6 +151,9 @@
   <svg class="icon-sound-on" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16 8a5 5 0 010 8" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round"/><path d="M18.5 5.5a9 9 0 010 13" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" opacity="0.6"/></svg>
   <svg class="icon-sound-off" viewBox="0 0 24 24" style="display:none"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
 </button>
+
+<!-- Atmospheric interactive background glow blob -->
+<div id="glowBgBlob"></div>
 
 <!-- ===================== MAIN CONTENT ===================== -->
 <main id="content">
@@ -127,6 +168,12 @@
       <span class="hero-title-line hero-title-bold">M4<span class="hero-title-accent">COMPETITION</span></span>
     </h1>
     <p class="hero-sub">Engineered obsession. 503 horsepower wrapped in carbon and intent.</p>
+    <div class="hero-cta-wrap">
+      <a href="#gallery" class="cta-btn" id="hero3DBtn">
+        <span class="btn-glow"></span>
+        <span>EXPERIENCE 3D MODEL</span>
+      </a>
+    </div>
     <div class="hero-scroll-cue">
       <span>SCROLL</span>
       <div class="scroll-cue-line"></div>
@@ -148,7 +195,7 @@
   <section id="overview" class="section panel-section">
     <div class="section-frame">
       <span class="section-index">01</span>
-      <h2 class="section-title">An obsession,<br/>given form.</h2>
+      <h2 class="section-title">An obsession,<br/><span class="text-accent">given form.</span></h2>
       <p class="section-copy">Every panel of the M4 Competition is shaped by airflow, not aesthetics alone — though the two were never meant to be separate. What you're looking at is the result of six generations of refinement, distilled into a single, unmistakable silhouette.</p>
       <div class="overview-pills">
         <div class="pill"><span class="pill-num">3.0L</span><span class="pill-label">Twin-Turbo Inline-6</span></div>
@@ -162,7 +209,7 @@
   <section id="performance" class="section panel-section">
     <div class="section-frame section-frame-right">
       <span class="section-index">02</span>
-      <h2 class="section-title">Numbers that<br/>argue back.</h2>
+      <h2 class="section-title">Numbers that<br/><span class="text-accent">argue back.</span></h2>
       <p class="section-copy">Specification, distilled to its essentials. No filler — just the figures that define how this car behaves at the limit.</p>
     </div>
     <div class="stat-grid" id="statGrid">
@@ -197,7 +244,7 @@
   <section id="exterior" class="section panel-section">
     <div class="section-frame">
       <span class="section-index">03</span>
-      <h2 class="section-title">Surface as<br/>strategy.</h2>
+      <h2 class="section-title">Surface as<br/><span class="text-accent">strategy.</span></h2>
       <p class="section-copy">The kidney grille inhales. The flared arches exhale. Every curve across the body was tested in a wind tunnel before it was ever allowed to look beautiful.</p>
       <ul class="detail-list">
         <li><span class="detail-dot"></span>Laser headlights with adaptive cornering</li>
@@ -211,7 +258,7 @@
   <section id="interior" class="section panel-section">
     <div class="section-frame section-frame-right">
       <span class="section-index">04</span>
-      <h2 class="section-title">Cockpit,<br/>not cabin.</h2>
+      <h2 class="section-title">Cockpit,<br/><span class="text-accent">not cabin.</span></h2>
       <p class="section-copy">M Carbon bucket seats hold you the way a good corner holds a tyre. Alcantara, brushed aluminium, and a driver display canted toward exactly one person.</p>
       <ul class="detail-list">
         <li><span class="detail-dot"></span>M Carbon bucket seats with illuminated badging</li>
@@ -225,7 +272,7 @@
   <section id="technology" class="section panel-section">
     <div class="section-frame">
       <span class="section-index">05</span>
-      <h2 class="section-title">S58. The heart<br/>of the matter.</h2>
+      <h2 class="section-title">S58. The heart<br/><span class="text-accent">of the matter.</span></h2>
       <p class="section-copy">A closed-deck block, twin mono-scroll turbochargers, and a cooling system borrowed straight from the GT3 racing programme. This is not a tuned engine — it was born to do this.</p>
       <div class="overview-pills">
         <div class="pill"><span class="pill-num">M TwinPower</span><span class="pill-label">Turbo Technology</span></div>
@@ -239,7 +286,7 @@
   <section id="wheels" class="section panel-section">
     <div class="section-frame section-frame-right">
       <span class="section-index">06</span>
-      <h2 class="section-title">Where power<br/>meets road.</h2>
+      <h2 class="section-title">Where power<br/><span class="text-accent">meets road.</span></h2>
       <p class="section-copy">M Compound brakes with blue calipers haul the Competition down from speed with a bite that never fades — track after track, lap after lap.</p>
     </div>
   </section>
@@ -248,7 +295,7 @@
   <section id="specs" class="section panel-section">
     <div class="specs-panel">
       <span class="section-index">07</span>
-      <h2 class="section-title">Specification sheet.</h2>
+      <h2 class="section-title">Specification <span class="text-accent">sheet.</span></h2>
       <div class="specs-table" id="specsTable">
         <div class="specs-row"><span>Engine</span><span>3.0L M TwinPower Turbo Inline-6</span></div>
         <div class="specs-row"><span>Power</span><span>503 hp @ 6,250 rpm</span></div>
@@ -268,7 +315,7 @@
   <section id="gallery" class="section panel-section">
     <div class="section-frame">
       <span class="section-index">08</span>
-      <h2 class="section-title">Walk around it.</h2>
+      <h2 class="section-title">Walk <span class="text-accent">around it.</span></h2>
       <p class="section-copy">Choose an angle. Let the camera do the rest.</p>
       <div class="gallery-presets" id="galleryPresets">
         <button class="preset-btn" data-preset="front">Front Quarter</button>
@@ -283,7 +330,7 @@
   <!-- FINAL SHOWCASE -->
   <section id="showcase" class="section panel-section">
     <div class="showcase-content">
-      <h2 class="showcase-title">THE M4<br/>COMPETITION</h2>
+      <h2 class="showcase-title">THE M4<br/><span class="text-accent">COMPETITION</span></h2>
       <p class="showcase-sub">Some cars are transportation. This one is an argument.</p>
     </div>
   </section>
@@ -292,7 +339,7 @@
   <section id="contact" class="section panel-section">
     <div class="contact-panel">
       <span class="section-index">09</span>
-      <h2 class="section-title">Configure yours.</h2>
+      <h2 class="section-title">Configure <span class="text-accent">yours.</span></h2>
       <p class="section-copy">Start building your M4 Competition, or talk to a product specialist near you.</p>
       <form class="contact-form" id="contactForm">
         <div class="form-row">
@@ -342,6 +389,36 @@
 
 </main>
 
-<script type="module" src="main.js"></script>
+<script>
+  // Fallback safety timeout: if the 3D scene doesn't boot within 35 seconds, show error.
+  setTimeout(() => {
+    if (!window.__bmwScene || !window.__bmwScene.car) {
+      const errorEl = document.getElementById('loaderError');
+      if (errorEl && errorEl.style.display === 'none') {
+        const errorMsgEl = errorEl.querySelector('.error-msg');
+        if (errorMsgEl) {
+          errorMsgEl.textContent = 'Failed to load external dependencies. Please check your network connection.';
+        }
+        errorEl.style.display = 'flex';
+        
+        const pctEl = document.getElementById('loaderPct');
+        const barFillEl = document.getElementById('loaderBarFill');
+        if (pctEl) pctEl.style.display = 'none';
+        if (barFillEl) barFillEl.parentElement.style.display = 'none';
+      }
+    }
+  }, 35000);
+
+  // Add a fallback click handler for the retry button if main.js fails to load
+  const fallbackRetryBtn = document.getElementById('loaderRetryBtn');
+  if (fallbackRetryBtn) {
+    fallbackRetryBtn.addEventListener('click', () => {
+      if (!window.__bmwScene) {
+        window.location.reload();
+      }
+    });
+  }
+</script>
+<script type="module" src="main.js?v=3.2"></script>
 </body>
 </html>

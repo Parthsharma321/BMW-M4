@@ -27,12 +27,13 @@ export function createScene(canvas){
     alpha: false,
   });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.9;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = !isLowPowerDevice();
 
   // ---- Environment lighting (procedural studio HDRI substitute) ----
   const pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -46,7 +47,8 @@ export function createScene(canvas){
   const keyLight = new THREE.DirectionalLight(0xf5f5f0, 1.5);
   keyLight.position.set(180, 220, 140);
   keyLight.castShadow = true;
-  keyLight.shadow.mapSize.set(2048, 2048);
+  const shadowSize = isLowPowerDevice() ? 1024 : 2048;
+  keyLight.shadow.mapSize.set(shadowSize, shadowSize);
   keyLight.shadow.camera.near = 1;
   keyLight.shadow.camera.far = 1200;
   keyLight.shadow.camera.left = -320;
@@ -97,33 +99,38 @@ export function createScene(canvas){
 
   // subtle radial grid lines on floor (studio feel)
   const gridTex = buildGridTexture();
+  gridTex.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
   floorMat.map = gridTex;
   floorMat.map.colorSpace = THREE.SRGBColorSpace;
 
   // ---- Post-processing composer ----
-  const composer = new EffectComposer(renderer);
-  const renderPass = new RenderPass(scene, camera);
-  composer.addPass(renderPass);
-
-  const bloomPass = new UnrealBloomPass(
-    new THREE.Vector2(window.innerWidth, window.innerHeight),
-    0.15, // strength
-    0.4,  // radius
-    0.95  // threshold
-  );
-  composer.addPass(bloomPass);
-
+  let composer = null;
+  let bloomPass = null;
   let ssaoPass = null;
-  if (!isLowPowerDevice()) {
-    ssaoPass = new SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
+  const useComposer = !isLowPowerDevice();
+
+  if (useComposer) {
+    composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+
+    bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2),
+      0.15, // strength
+      0.4,  // radius
+      0.95  // threshold
+    );
+    composer.addPass(bloomPass);
+
+    ssaoPass = new SSAOPass(scene, camera, window.innerWidth / 2, window.innerHeight / 2);
     ssaoPass.kernelRadius = 10;
     ssaoPass.minDistance = 0.0005;
     ssaoPass.maxDistance = 0.08;
     composer.addPass(ssaoPass);
-  }
 
-  const outputPass = new OutputPass();
-  composer.addPass(outputPass);
+    const outputPass = new OutputPass();
+    composer.addPass(outputPass);
+  }
 
   function isLowPowerDevice(){
     const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
@@ -179,21 +186,36 @@ export function createScene(canvas){
     return tex;
   }
 
+  function dispose(){
+    window.removeEventListener('resize', handleResize);
+    renderer.dispose();
+    floorGeo.dispose();
+    floorMat.dispose();
+    if (gridTex) gridTex.dispose();
+    if (composer) {
+      composer.passes.forEach(pass => {
+        if (pass.dispose) pass.dispose();
+      });
+    }
+  }
+
   function handleResize(){
     const w = window.innerWidth, h = window.innerHeight;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
-    composer.setSize(w, h);
-    bloomPass.setSize(w, h);
-    if (ssaoPass) ssaoPass.setSize(w, h);
+    if (useComposer && composer) {
+      composer.setSize(w, h);
+      if (bloomPass) bloomPass.setSize(w / 2, h / 2);
+      if (ssaoPass) ssaoPass.setSize(w / 2, h / 2);
+    }
   }
   window.addEventListener('resize', handleResize);
 
   return {
-    scene, camera, renderer, composer,
+    scene, camera, renderer, composer, useComposer,
     keyLight, rimLight, fillLight, accentLight, accentLight2,
     floor, bloomPass, ssaoPass,
-    handleResize,
+    handleResize, dispose
   };
 }

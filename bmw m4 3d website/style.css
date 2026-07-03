@@ -31,12 +31,14 @@
   --glass-bg: rgba(20,22,27,0.55);
   --glass-bg-light: rgba(255,255,255,0.04);
 
-  --font-display: 'Oswald', sans-serif;
+  --font-display: 'Syncopate', sans-serif;
+  --font-heading: 'Space Grotesk', sans-serif;
   --font-body: 'Inter', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
   --ease-luxury: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --m-gradient: linear-gradient(90deg, #0066b2 0%, #1c3fa8 50%, #e6293c 100%);
 }
 
 *{ margin:0; padding:0; box-sizing:border-box; }
@@ -72,6 +74,7 @@ ul{ list-style:none; }
   width:100%; height:100%;
   z-index:1;
   outline:none;
+  touch-action:none;
 }
 
 #vignette{
@@ -152,8 +155,8 @@ ul{ list-style:none; }
 .loader-bar-fill{
   position:absolute; left:0; top:0; bottom:0;
   width:0%;
-  background:linear-gradient(90deg, var(--royal), var(--cyan));
-  box-shadow:0 0 12px rgba(58,214,255,0.7);
+  background:var(--m-gradient);
+  box-shadow:0 0 12px rgba(28,63,168,0.7);
 }
 .loader-pct{
   font-family:var(--font-mono);
@@ -183,6 +186,36 @@ ul{ list-style:none; }
 
 #loader.is-hidden{
   pointer-events:none;
+}
+.loader-error{
+  display:none;
+  flex-direction:column;
+  align-items:center;
+  gap:16px;
+  margin-top:20px;
+}
+.error-msg{
+  color:var(--m-red);
+  font-family:var(--font-mono);
+  font-size:13px;
+  letter-spacing:0.04em;
+}
+.retry-btn{
+  font-family:var(--font-mono);
+  font-size:11.5px;
+  letter-spacing:0.08em;
+  padding:10px 24px;
+  border:1px solid var(--cyan);
+  border-radius:20px;
+  color:var(--cyan);
+  background:rgba(58,214,255,0.06);
+  transition:all 0.35s var(--ease-soft);
+  box-shadow:0 0 10px rgba(58,214,255,0.1);
+}
+.retry-btn:hover{
+  background:var(--cyan);
+  color:var(--void);
+  box-shadow:0 0 20px rgba(58,214,255,0.35);
 }
 
 /* ============================================================
@@ -456,10 +489,10 @@ ul{ list-style:none; }
   letter-spacing:0.2em;
 }
 .section-title{
-  font-family:var(--font-display);
+  font-family:var(--font-heading);
   font-weight:600;
-  font-size:clamp(34px,5.4vw,58px);
-  line-height:1.06;
+  font-size:clamp(30px,4.5vw,50px);
+  line-height:1.1;
   letter-spacing:-0.01em;
   color:#fff;
 }
@@ -534,30 +567,6 @@ ul{ list-style:none; }
   gap:0;
 }
 .hero-eyebrow-wrap{ overflow:hidden; margin-bottom:18px; }
-/* ============================================================
-   JS-READY GATING
-   These elements start hidden so GSAP can animate them in, but only
-   once JavaScript has actually attached the .js-ready class to <html>.
-   If JS fails to load entirely, the page falls back to fully visible,
-   static content instead of staying blank forever.
-   ============================================================ */
-html:not(.js-ready) .eyebrow,
-html:not(.js-ready) .hero-title-light,
-html:not(.js-ready) .hero-title-bold,
-html:not(.js-ready) .hero-sub,
-html:not(.js-ready) .hero-scroll-cue,
-html:not(.js-ready) .hero-controls,
-html:not(.js-ready) .section-frame,
-html:not(.js-ready) .stat-grid,
-html:not(.js-ready) .specs-panel,
-html:not(.js-ready) .showcase-content,
-html:not(.js-ready) .contact-panel{
-  opacity:1 !important;
-  transform:none !important;
-  filter:none !important;
-}
-html:not(.js-ready) #loader{ display:none !important; }
-html:not(.js-ready) #webgl{ display:none !important; }
 
 .eyebrow{
   display:block;
@@ -589,9 +598,9 @@ html:not(.js-ready) #webgl{ display:none !important; }
 .hero-title-bold{
   font-family:var(--font-display);
   font-weight:700;
-  font-size:clamp(64px,13vw,168px);
-  line-height:0.92;
-  letter-spacing:-0.01em;
+  font-size:clamp(40px,7.5vw,105px);
+  line-height:0.96;
+  letter-spacing:-0.03em;
   color:#fff;
   transform:translateY(110%);
   display:flex;
@@ -796,7 +805,7 @@ html:not(.js-ready) #webgl{ display:none !important; }
 .showcase-title{
   font-family:var(--font-display);
   font-weight:700;
-  font-size:clamp(48px,9vw,128px);
+  font-size:clamp(34px,6.5vw,85px);
   line-height:0.96;
   background:linear-gradient(135deg, #fff 20%, var(--cyan) 55%, var(--royal-bright) 85%);
   -webkit-background-clip:text;
@@ -966,6 +975,320 @@ html:not(.js-ready) #webgl{ display:none !important; }
   .hero-scroll-cue{ display:none; }
   .form-row{ flex-direction:column; }
   .footer-cols{ gap:30px; }
+}
+
+/* ============================================================
+   PAINT CONFIGURATOR DOCK
+   ============================================================ */
+#paintConfigurator {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 95;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid var(--line);
+  padding: 12px 24px;
+  border-radius: 30px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.05);
+}
+
+.config-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.15em;
+  color: var(--steel-dim);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.color-options {
+  display: flex;
+  gap: 10px;
+}
+
+.color-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background-color: var(--color-hex);
+  cursor: pointer;
+  transition: all 0.3s var(--ease-soft);
+  position: relative;
+}
+
+.color-dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  transition: all 0.3s;
+}
+
+.color-dot:hover::after {
+  border-color: rgba(255,255,255,0.2);
+}
+
+.color-dot.is-active::after {
+  border-color: var(--cyan);
+  box-shadow: 0 0 8px rgba(58,214,255,0.4);
+}
+
+#hudVisualizer {
+  display: block;
+  width: 100%;
+  height: 36px;
+  opacity: 0.85;
+}
+
+@media (max-width: 880px) {
+  #paintConfigurator {
+    bottom: auto;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 16px;
+    gap: 10px;
+  }
+  .config-label {
+    display: none;
+  }
+}
+
+/* ============================================================
+   HERO CTA EXPERIENCE BUTTON
+   ============================================================ */
+.hero-cta-wrap {
+  overflow: hidden;
+  margin-top: 28px;
+  transform: translateY(30px);
+  opacity: 0;
+}
+
+.cta-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 36px;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: #fff;
+  text-decoration: none;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line-bright);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.4s var(--ease-soft);
+  cursor: pointer;
+}
+
+.cta-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--m-gradient);
+  opacity: 0;
+  z-index: 1;
+  transition: opacity 0.4s var(--ease-soft);
+}
+
+.cta-btn > * {
+  position: relative;
+  z-index: 2;
+}
+
+.cta-btn:hover {
+  border-color: transparent;
+  box-shadow: 0 0 30px rgba(28,63,168,0.4);
+  transform: translateY(-2px);
+}
+
+.cta-btn:hover::before {
+  opacity: 1;
+}
+
+.btn-glow {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  background: var(--active-accent, var(--cyan));
+  filter: blur(25px);
+  opacity: 0.15;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.4s;
+}
+
+.cta-btn:hover .btn-glow {
+  opacity: 0.35;
+}
+
+/* ============================================================
+   NAV CTA OUTLINE & FREEHAND MODE OVERRIDES
+   ============================================================ */
+.nav-cta.nav-cta-outline {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: transparent;
+  margin-right: 12px;
+}
+.nav-cta.nav-cta-outline:hover {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.1);
+}
+.nav-cta.nav-cta-outline.is-active {
+  border-color: var(--cyan);
+  background: rgba(58, 214, 255, 0.15);
+  box-shadow: 0 0 25px rgba(58, 214, 255, 0.4);
+  color: #fff;
+}
+
+body.is-freehand-active #content {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.5s ease;
+}
+
+body.is-freehand-active #telemetryHud,
+body.is-freehand-active .customizer-dock,
+body.is-freehand-active #paintConfigurator,
+body.is-freehand-active .hero-scroll-cue,
+body.is-freehand-active .hero-controls,
+body.is-freehand-active #navbar .nav-logo,
+body.is-freehand-active #navbar .nav-links,
+body.is-freehand-active #navbar #navConfigure,
+body.is-freehand-active #navbar .nav-burger {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.4s ease;
+}
+
+/* Ensure the canvas has full pointer events in freehand mode */
+body.is-freehand-active #webgl {
+  pointer-events: auto !important;
+  z-index: 9999 !important;
+}
+
+/* Make sure the navbar actions container stays on top of the canvas so the toggle remains clickable */
+body.is-freehand-active #navbar {
+  z-index: 100000 !important;
+  pointer-events: none;
+}
+body.is-freehand-active #navbar #navFreehandBtn {
+  pointer-events: auto;
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Hide vignette & grain overlay so it's a completely clear shot of the car */
+body.is-freehand-active #vignette,
+body.is-freehand-active #grain {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* ============================================================
+   ATMOSPHERIC INTERACTIVE BACKGROUND GLOW BLOB
+   ============================================================ */
+#glowBgBlob {
+  position: fixed;
+  width: 50vw;
+  height: 50vw;
+  max-width: 600px;
+  max-height: 600px;
+  background: radial-gradient(circle, var(--active-accent, var(--cyan)) 0%, transparent 70%);
+  opacity: 0.12;
+  filter: blur(120px);
+  pointer-events: none;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  transition: background 1.5s var(--ease-soft), top 1.8s var(--ease-soft), left 1.8s var(--ease-soft);
+}
+
+.text-accent {
+  color: var(--active-accent, var(--cyan)) !important;
+  text-shadow: 0 0 20px rgba(255,255,255,0.02);
+  transition: color 1.2s var(--ease-soft);
+}
+
+.section-index {
+  color: var(--active-accent, var(--cyan)) !important;
+  transition: color 1.2s var(--ease-soft);
+}
+
+.hero-title-accent {
+  color: var(--active-accent, var(--cyan)) !important;
+  text-shadow: 0 0 24px var(--active-accent, var(--cyan));
+  transition: color 1.2s var(--ease-soft), text-shadow 1.2s var(--ease-soft);
+}
+
+.hud-value {
+  color: var(--active-accent, var(--cyan)) !important;
+  text-shadow: 0 0 8px var(--active-accent, var(--cyan));
+  transition: color 1.2s var(--ease-soft), text-shadow 1.2s var(--ease-soft);
+}
+
+.rail-fill {
+  stroke: var(--active-accent, var(--cyan)) !important;
+  transition: stroke 1.2s var(--ease-soft);
+}
+
+.nav-links a.is-active, #mobileMenu a.is-active {
+  color: var(--active-accent, var(--cyan)) !important;
+  text-shadow: 0 0 8px var(--active-accent, var(--cyan));
+  transition: color 1.2s var(--ease-soft), text-shadow 1.2s var(--ease-soft);
+}
+
+.nav-links a.is-active::after {
+  background: var(--active-accent, var(--cyan)) !important;
+  box-shadow: 0 0 8px var(--active-accent, var(--cyan));
+  transition: background 1.2s var(--ease-soft), box-shadow 1.2s var(--ease-soft);
+}
+
+.detail-dot {
+  background: var(--active-accent, var(--cyan)) !important;
+  box-shadow: 0 0 8px var(--active-accent, var(--cyan));
+  transition: background 1.2s var(--ease-soft), box-shadow 1.2s var(--ease-soft);
+}
+
+.pill-num {
+  color: var(--active-accent, var(--cyan)) !important;
+  transition: color 1.2s var(--ease-soft);
+}
+
+.stat-num {
+  color: var(--active-accent, var(--cyan)) !important;
+  transition: color 1.2s var(--ease-soft);
+}
+
+.stat-card:hover {
+  border-color: var(--active-accent, var(--cyan)) !important;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 15px rgba(255,255,255,0.02);
+}
+
+.specs-row:hover span:first-child {
+  color: var(--active-accent, var(--cyan)) !important;
+  transition: color 0.3s;
+}
+
+.preset-btn.is-active {
+  border-color: var(--active-accent, var(--cyan)) !important;
+  color: #fff !important;
+  box-shadow: 0 0 15px rgba(58,214,255,0.15);
 }
 
 @media (prefers-reduced-motion: reduce){
